@@ -1,0 +1,369 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#121633">
+<title>Flipside Sort</title>
+<style>
+  :root {
+    --bg1: #121633; --bg2: #2a1f55; --glass: rgba(255,255,255,.07); --edge: rgba(255,255,255,.28);
+    --text: #f2f0ff; --muted: #a9a3d6; --accent: #ffcf5a; --ball: 40px; --step: 44px; --tubeW: 56px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: ui-rounded, "SF Pro Rounded", "Nunito", system-ui, sans-serif; color: var(--text);
+    background: radial-gradient(120% 80% at 50% 0%, var(--bg2), var(--bg1) 70%);
+    min-height: 100dvh; display: flex; flex-direction: column; align-items: center;
+    user-select: none; -webkit-user-select: none; touch-action: manipulation; overflow: hidden;
+  }
+  .app { width: 100%; max-width: 480px; height: 100dvh; display: flex; flex-direction: column; padding: max(10px, env(safe-area-inset-top)) 14px max(12px, env(safe-area-inset-bottom)); }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .title { font-weight: 800; font-size: 20px; letter-spacing: .3px; }
+  .title small { display: block; font-size: 12px; font-weight: 600; color: var(--muted); letter-spacing: 0; }
+  .iconbtn { width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--edge); background: var(--glass); color: var(--text); font-size: 18px; display: grid; place-items: center; cursor: pointer; }
+  .hud { display: flex; justify-content: space-between; align-items: center; margin: 14px 2px 6px; font-weight: 700; }
+  .stat { font-size: 15px; } .stat span { color: var(--muted); font-weight: 600; }
+  .flip { display: flex; align-items: center; gap: 8px; padding: 6px 12px; border-radius: 999px; background: rgba(255,207,90,.12); border: 1px solid rgba(255,207,90,.4); color: var(--accent); font-size: 14px; transition: transform .2s; }
+  .flip.hidden { visibility: hidden; }
+  .flip.warn { animation: pulse .6s ease-in-out infinite alternate; }
+  .dots { display: flex; gap: 4px; } .dots i { width: 7px; height: 7px; border-radius: 50%; background: rgba(255,207,90,.25); } .dots i.on { background: var(--accent); }
+  @keyframes pulse { to { transform: scale(1.08); background: rgba(255,207,90,.25); } }
+  .board { flex: 1; display: flex; flex-direction: column; justify-content: center; gap: 34px; padding-top: 50px; }
+  .row { display: flex; justify-content: center; gap: 12px; }
+  .tube {
+    position: relative; width: var(--tubeW); border-radius: 28px; cursor: pointer;
+    background: linear-gradient(90deg, rgba(255,255,255,.12), rgba(255,255,255,.03) 40%, rgba(255,255,255,.08));
+    border: 2px solid var(--edge); box-shadow: inset 0 0 12px rgba(0,0,0,.35);
+    transition: transform .5s cubic-bezier(.6,-0.2,.4,1.2), border-color .2s, box-shadow .2s;
+  }
+  .tube.sel { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(255,207,90,.25), inset 0 0 12px rgba(0,0,0,.35); }
+  .tube.done { border-color: #7dffb0; box-shadow: 0 0 18px rgba(125,255,176,.45), inset 0 0 12px rgba(0,0,0,.35); }
+  .tube.hint { animation: hint .5s ease-in-out 4 alternate; }
+  .tube.bad { animation: shake .3s; }
+  .tube.rot { transform: rotate(180deg); }
+  @keyframes hint { to { border-color: #7fd8ff; box-shadow: 0 0 20px rgba(127,216,255,.7); } }
+  @keyframes shake { 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+  .ball {
+    position: absolute; left: calc((var(--tubeW) - 4px - var(--ball)) / 2); width: var(--ball); height: var(--ball); border-radius: 50%;
+    display: grid; place-items: center; font-size: 15px; color: rgba(255,255,255,.75); text-shadow: 0 1px 1px rgba(0,0,0,.35);
+    background: radial-gradient(circle at 32% 28%, rgba(255,255,255,.85), rgba(255,255,255,0) 30%), var(--c);
+    box-shadow: inset -4px -6px 10px rgba(0,0,0,.28), 0 2px 4px rgba(0,0,0,.3);
+    transition: bottom .16s ease-out;
+  }
+  .ball.fall { transition: bottom .38s cubic-bezier(.55,0,1,.45); }
+  .ball.float { position: fixed; z-index: 50; pointer-events: none; transition: none; }
+  .ball.ghost { visibility: hidden; }
+  .lock { position: absolute; inset: 0; border-radius: 26px; background: rgba(18,22,51,.55); display: grid; place-items: center; backdrop-filter: blur(1px); transition: opacity .35s, transform .35s; }
+  .lock svg { width: 30px; height: 30px; }
+  .lock.gone { opacity: 0; transform: scale(1.4); }
+  footer { display: flex; justify-content: center; gap: 12px; margin-top: 12px; }
+  .btn { flex: 1; max-width: 140px; padding: 12px 8px; border-radius: 16px; border: 1px solid var(--edge); background: var(--glass); color: var(--text); font: inherit; font-weight: 700; font-size: 15px; cursor: pointer; display: flex; gap: 6px; justify-content: center; align-items: center; }
+  .btn:disabled { opacity: .4; cursor: default; }
+  .btn .n { font-size: 12px; background: rgba(255,255,255,.15); border-radius: 999px; padding: 1px 7px; }
+  .btn.primary { background: var(--accent); color: #231a00; border: none; }
+  .toast { position: fixed; left: 50%; top: 92px; transform: translate(-50%, -20px); opacity: 0; max-width: 340px; width: calc(100% - 40px); background: #fff; color: #1b1740; padding: 12px 16px; border-radius: 14px; font-weight: 600; font-size: 14px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,.35); transition: .3s; z-index: 60; pointer-events: none; }
+  .toast.show { opacity: 1; transform: translate(-50%, 0); }
+  .overlay { position: fixed; inset: 0; background: rgba(8,10,25,.72); display: none; place-items: center; z-index: 70; padding: 20px; }
+  .overlay.show { display: grid; }
+  .card { background: linear-gradient(#2d2563, #1c1a45); border: 1px solid var(--edge); border-radius: 24px; padding: 24px 20px; width: 100%; max-width: 360px; text-align: center; }
+  .card h2 { margin: 0 0 6px; font-size: 26px; }
+  .card p { color: var(--muted); margin: 6px 0 16px; line-height: 1.4; }
+  .stars { font-size: 42px; letter-spacing: 6px; margin: 6px 0; }
+  .stars .off { opacity: .2; }
+  .grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; max-height: 55vh; overflow-y: auto; padding: 4px; }
+  .lv { aspect-ratio: 1; border-radius: 12px; border: 1px solid var(--edge); background: var(--glass); color: var(--text); font: inherit; font-weight: 800; cursor: pointer; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 16px; }
+  .lv small { font-size: 9px; color: var(--accent); letter-spacing: 1px; }
+  .lv:disabled { opacity: .3; }
+  .lv.cur { border-color: var(--accent); }
+  .card .btn { max-width: none; width: 100%; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <button class="iconbtn" id="menuBtn" aria-label="Levels">☰</button>
+    <div class="title" style="text-align:center">Flipside Sort<small id="lvLabel">Level 1</small></div>
+    <button class="iconbtn" id="soundBtn" aria-label="Sound">🔊</button>
+  </header>
+  <div class="hud">
+    <div class="stat" id="moves">0 <span>/ par 0</span></div>
+    <div class="flip" id="flip"><span>↻ Flip in <b id="flipN">5</b></span><div class="dots" id="dots"></div></div>
+  </div>
+  <div class="board" id="board"></div>
+  <footer>
+    <button class="btn" id="undoBtn">↶ Undo <span class="n" id="undoN">5</span></button>
+    <button class="btn" id="restartBtn">⟲ Restart</button>
+    <button class="btn" id="hintBtn">💡 Hint <span class="n" id="hintN">3</span></button>
+  </footer>
+</div>
+<div class="toast" id="toast"></div>
+<div class="overlay" id="winOv"><div class="card">
+  <h2>Sorted!</h2><div class="stars" id="winStars"></div><p id="winText"></p>
+  <button class="btn primary" id="nextBtn">Next level →</button>
+  <button class="btn" id="replayBtn">Replay</button>
+</div></div>
+<div class="overlay" id="menuOv"><div class="card">
+  <h2>Levels</h2><p>Tap a level to play. ★ = best result.</p>
+  <div class="grid" id="grid"></div>
+  <button class="btn" id="closeMenu">Close</button>
+</div></div>
+
+<script>
+/*LOGIC*/
+const LEVELS = /*LEVELS*/;
+
+const COLORS = ['#ff5a6e', '#4fa3ff', '#ffd23f', '#3ddc84', '#b46bff', '#ff9a3c', '#3fe0d0', '#ff7ad9'];
+const GLYPHS = ['●', '▲', '■', '◆', '★', '✚', '♥', '⬢'];
+const UNDOS = 5, HINTS = 3;
+const $ = (id) => document.getElementById(id);
+
+// ---------- persistence (best-effort) ----------
+const SAVE_KEY = 'flipside-sort-v1';
+let save = { unlocked: 1, stars: {}, muted: false, current: 1 };
+try { Object.assign(save, JSON.parse(localStorage.getItem(SAVE_KEY) || '{}')); } catch (e) {}
+const persist = () => { try { localStorage.setItem(SAVE_KEY, JSON.stringify(save)); } catch (e) {} };
+
+// ---------- audio ----------
+let actx = null;
+function tone(freq, dur = 0.08, type = 'sine', vol = 0.15, slideTo) {
+  if (save.muted) return;
+  try {
+    actx = actx || new (window.AudioContext || window.webkitAudioContext)();
+    const o = actx.createOscillator(), g = actx.createGain(), t = actx.currentTime;
+    o.type = type; o.frequency.setValueAtTime(freq, t);
+    if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+    g.gain.setValueAtTime(vol, t); g.gain.exponentialRampToValueAtTime(0.001, t + dur);
+    o.connect(g).connect(actx.destination); o.start(t); o.stop(t + dur);
+  } catch (e) {}
+}
+const sfx = {
+  pick: () => tone(660, 0.06),
+  drop: () => tone(420, 0.09, 'triangle'),
+  bad: () => tone(160, 0.12, 'square', 0.06),
+  flip: () => tone(200, 0.45, 'sawtooth', 0.06, 900),
+  unlock: () => { tone(520, 0.1); setTimeout(() => tone(780, 0.15), 90); },
+  done: () => tone(880, 0.12, 'triangle'),
+  win: () => [523, 659, 784, 1046].forEach((f, i) => setTimeout(() => tone(f, 0.18, 'triangle'), i * 110)),
+};
+const buzz = (ms) => { try { navigator.vibrate && navigator.vibrate(ms); } catch (e) {} };
+
+// ---------- game state ----------
+let level, state, history, sel = -1, busy = false, undosLeft, hintsLeft;
+
+function loadLevel(n) {
+  n = Math.max(1, Math.min(LEVELS.length, n));
+  level = LEVELS[n - 1];
+  state = Logic.newState(level);
+  history = []; sel = -1; busy = false; undosLeft = UNDOS; hintsLeft = HINTS;
+  save.current = n; persist();
+  $('lvLabel').textContent = 'Level ' + n;
+  render();
+  if (n === 1) toast('Tap a tube, then another, to move the top ball. It can go on the same colour or into an empty tube.', 4500);
+  else if (n === 6) toast('New twist: every ' + level.flipEvery + ' moves ALL tubes flip upside down. Plan for it!', 5000);
+  else if (n === 11) toast('Locked tube! Complete any one tube to unlock it.', 4500);
+}
+
+// ---------- rendering ----------
+function layoutRows(count) {
+  if (count <= 5) return [count];
+  const a = Math.ceil(count / 2); return [a, count - a];
+}
+
+function render(opts = {}) {
+  const board = $('board');
+  board.innerHTML = '';
+  const step = parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--step'));
+  const tubeH = state.cap * step + 12;
+  let i = 0;
+  for (const n of layoutRows(state.tubes.length)) {
+    const row = document.createElement('div'); row.className = 'row';
+    for (let k = 0; k < n; k++, i++) {
+      const t = state.tubes[i], idx = i;
+      const el = document.createElement('div');
+      el.className = 'tube' + (Logic.isComplete(t, state.cap) ? ' done' : '') + (idx === sel ? ' sel' : '');
+      el.style.height = tubeH + 'px';
+      el.dataset.i = idx;
+      t.forEach((c, j) => {
+        const b = document.createElement('div');
+        b.className = 'ball';
+        b.style.setProperty('--c', COLORS[c]);
+        b.textContent = GLYPHS[c];
+        let bottom = 6 + j * step;
+        if (idx === sel && j === t.length - 1) bottom = tubeH + 8;
+        if (opts.fallFrom) { b.style.bottom = (6 + (state.cap - t.length + j) * step) + 'px'; b.dataset.to = bottom; }
+        else b.style.bottom = bottom + 'px';
+        if (opts.hideTopOf === idx && j === t.length - 1) b.classList.add('ghost');
+        el.appendChild(b);
+      });
+      if (idx === state.locked || opts.unlockAnim === idx) {
+        const lk = document.createElement('div'); lk.className = 'lock';
+        lk.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="#ffcf5a" stroke-width="2.2" stroke-linecap="round"><rect x="5" y="11" width="14" height="10" rx="2.5" fill="rgba(255,207,90,.15)"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>';
+        el.appendChild(lk);
+        if (opts.unlockAnim === idx) requestAnimationFrame(() => requestAnimationFrame(() => lk.classList.add('gone')));
+      }
+      el.addEventListener('pointerdown', () => onTube(idx));
+      row.appendChild(el);
+    }
+    board.appendChild(row);
+  }
+  if (opts.fallFrom) {
+    board.offsetHeight; // reflow, then let balls fall
+    board.querySelectorAll('.ball').forEach((b) => { b.classList.add('fall'); b.style.bottom = b.dataset.to + 'px'; });
+  }
+  renderHud();
+}
+
+function renderHud() {
+  $('moves').innerHTML = state.moves + ' <span>/ par ' + level.par + '</span>';
+  const flip = $('flip');
+  flip.classList.toggle('hidden', !state.flipEvery);
+  if (state.flipEvery) {
+    const left = Logic.movesUntilFlip(state);
+    $('flipN').textContent = left;
+    flip.classList.toggle('warn', left === 1);
+    $('dots').innerHTML = Array.from({ length: state.flipEvery }, (_, k) => '<i class="' + (k < state.flipEvery - left ? 'on' : '') + '"></i>').join('');
+  }
+  $('undoN').textContent = undosLeft;
+  $('undoBtn').disabled = !history.length || undosLeft <= 0;
+  $('hintN').textContent = hintsLeft;
+  $('hintBtn').disabled = hintsLeft <= 0;
+  $('soundBtn').textContent = save.muted ? '🔇' : '🔊';
+}
+
+const tubeEl = (i) => document.querySelector('.tube[data-i="' + i + '"]');
+const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ---------- input ----------
+function onTube(i) {
+  if (busy) return;
+  if (i === state.locked) { tubeEl(i).classList.add('bad'); sfx.bad(); toast('Locked — complete any tube to open it.', 1800); return; }
+  if (sel === -1) {
+    if (!state.tubes[i].length || Logic.isComplete(state.tubes[i], state.cap)) return;
+    sel = i; sfx.pick(); buzz(8); render(); return;
+  }
+  if (sel === i) { sel = -1; render(); return; }
+  if (Logic.canMove(state, sel, i)) { doMove(sel, i); return; }
+  if (state.tubes[i].length && !Logic.isComplete(state.tubes[i], state.cap)) { sel = i; sfx.pick(); render(); return; }
+  const el = tubeEl(i); el.classList.remove('bad'); el.offsetWidth; el.classList.add('bad'); sfx.bad(); buzz(30);
+}
+
+async function doMove(a, b) {
+  busy = true;
+  const balls = tubeEl(a).querySelectorAll('.ball'), srcBall = balls[balls.length - 1];
+  const from = srcBall.getBoundingClientRect();
+  const color = state.tubes[a][state.tubes[a].length - 1];
+  history.push(state);
+  const res = Logic.applyMove(state, a, b);
+  // Show the pre-flip board while the ball travels.
+  const preFlip = res.flipped ? Logic.clone(res.state) : res.state;
+  if (res.flipped) { preFlip.tubes.forEach((t) => t.reverse()); preFlip.upsideDown = !preFlip.upsideDown; }
+  state = preFlip; sel = -1;
+  render({ hideTopOf: b });
+  const target = tubeEl(b).querySelector('.ball.ghost').getBoundingClientRect();
+  const fl = document.createElement('div');
+  fl.className = 'ball float'; fl.style.setProperty('--c', COLORS[color]); fl.textContent = GLYPHS[color];
+  fl.style.left = from.left + 'px'; fl.style.top = from.top + 'px';
+  document.body.appendChild(fl);
+  const tb = tubeEl(b).getBoundingClientRect();
+  const dx = target.left - from.left, upY = tb.top - 50 - from.top, dy = target.top - from.top;
+  await fl.animate([
+    { transform: 'translate(0,0)' },
+    { transform: `translate(${dx}px, ${Math.min(0, upY)}px)`, offset: 0.55 },
+    { transform: `translate(${dx}px, ${dy}px)` },
+  ], { duration: 300, easing: 'ease-in-out' }).finished;
+  fl.remove();
+  sfx.drop(); buzz(10);
+  render();
+  if (Logic.isComplete(state.tubes[b], state.cap)) sfx.done();
+
+  if (res.unlocked) {
+    const was = history[history.length - 1].locked;
+    state = { ...state, locked: -1 };
+    render({ unlockAnim: was }); sfx.unlock(); toast('Unlocked!', 1200);
+    await wait(380);
+  }
+  if (res.flipped) {
+    await wait(120);
+    sfx.flip(); buzz([20, 40, 20]);
+    document.querySelectorAll('.tube').forEach((t) => t.classList.add('rot'));
+    await wait(520);
+    state = res.state;
+    render({ fallFrom: true });
+    await wait(400);
+  }
+  state = res.state;
+  render();
+  busy = false;
+  if (Logic.isSolved(state)) return win();
+  if (!Logic.legalMoves(state).length) toast('No moves left — try Undo or Restart.', 2500);
+}
+
+function win() {
+  const n = level.n, m = state.moves;
+  const stars = m <= level.par ? 3 : m <= Math.ceil(level.par * 1.35) ? 2 : 1;
+  save.stars[n] = Math.max(save.stars[n] || 0, stars);
+  save.unlocked = Math.max(save.unlocked, Math.min(LEVELS.length, n + 1));
+  persist();
+  sfx.win(); buzz([30, 50, 30]);
+  $('winStars').innerHTML = [1, 2, 3].map((k) => '<span class="' + (k <= stars ? '' : 'off') + '">★</span>').join('');
+  $('winText').textContent = m + ' moves (par ' + level.par + ')' + (stars < 3 ? ' — beat par for 3 stars.' : ' — perfect!');
+  $('nextBtn').style.display = n < LEVELS.length ? '' : 'none';
+  setTimeout(() => $('winOv').classList.add('show'), 450);
+}
+
+// ---------- buttons ----------
+$('undoBtn').onclick = () => {
+  if (busy || !history.length || undosLeft <= 0) return;
+  state = history.pop(); undosLeft--; sel = -1; render(); sfx.pick();
+};
+$('restartBtn').onclick = () => { if (!busy) loadLevel(level.n); };
+$('hintBtn').onclick = () => {
+  if (busy || hintsLeft <= 0) return;
+  busy = true; toast('Thinking…', 800);
+  setTimeout(() => {
+    const sol = Logic.solve(state, { maxNodes: 40000, weight: 3 });
+    busy = false;
+    if (!sol) { toast('Looks like a dead end — Undo a few moves or Restart.', 2800); return; }
+    if (!sol.length) return;
+    hintsLeft--; sel = -1; render();
+    const [a, b] = sol[0];
+    tubeEl(a).classList.add('hint'); tubeEl(b).classList.add('hint');
+    toast('Move from the first glowing tube to the second.', 2000);
+  }, 30);
+};
+$('soundBtn').onclick = () => { save.muted = !save.muted; persist(); renderHud(); };
+$('nextBtn').onclick = () => { $('winOv').classList.remove('show'); loadLevel(level.n + 1); };
+$('replayBtn').onclick = () => { $('winOv').classList.remove('show'); loadLevel(level.n); };
+$('menuBtn').onclick = () => {
+  if (busy) return;
+  $('grid').innerHTML = LEVELS.map((lv) => {
+    const s = save.stars[lv.n] || 0, open = lv.n <= save.unlocked;
+    return '<button class="lv' + (lv.n === level.n ? ' cur' : '') + '" data-n="' + lv.n + '"' + (open ? '' : ' disabled') + '>' + lv.n + '<small>' + '★'.repeat(s) + '</small></button>';
+  }).join('');
+  $('menuOv').classList.add('show');
+};
+$('grid').onclick = (e) => { const b = e.target.closest('.lv'); if (b && !b.disabled) { $('menuOv').classList.remove('show'); loadLevel(+b.dataset.n); } };
+$('closeMenu').onclick = () => $('menuOv').classList.remove('show');
+
+let toastT;
+function toast(msg, ms = 2000) {
+  const t = $('toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastT); toastT = setTimeout(() => t.classList.remove('show'), ms);
+}
+
+// Fit the board on small screens
+function fit() {
+  const h = window.innerHeight, w = Math.min(window.innerWidth, 480);
+  const s = Math.max(0.7, Math.min(1, (h - 230) / 520, (w - 20) / 340));
+  const r = document.documentElement.style;
+  r.setProperty('--ball', 40 * s + 'px'); r.setProperty('--step', 44 * s + 'px'); r.setProperty('--tubeW', 56 * s + 'px');
+  if (state) render();
+}
+window.addEventListener('resize', fit);
+fit();
+loadLevel(Math.min(save.current || 1, save.unlocked));
+</script>
+</body>
+</html>

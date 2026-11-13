@@ -1,0 +1,15 @@
+{
+  "name": "flipside-sort",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "gen": "node gen.js",
+    "build": "node build.js",
+    "test": "node --test logic.test.js",
+    "e2e": "node build.js && node smoke.e2e.js",
+    "test:all": "npm test && npm run e2e"
+  },
+  "devDependencies": {
+    "playwright": "^1.56.0"
+  }
+}
